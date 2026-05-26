@@ -76,20 +76,18 @@ router.post('/import', importUpload.single('file'), async (req, res, next) => {
     let imported = 0
     let skipped = 0
 
-    await prisma.$transaction(async (tx) => {
-      for (const row of dataRows) {
-        const itemId = String(row[0] ?? '').trim()
-        if (!itemId) { skipped++; continue }
-        const itemName = String(row[1] ?? '').trim() || null
-        const uom = String(row[2] ?? '').trim() || null
-        await tx.productRegistry.upsert({
-          where: { itemId },
-          update: { itemName, uom },
-          create: { itemId, itemName, uom },
-        })
-        imported++
-      }
-    })
+    for (const row of dataRows) {
+      const itemId = String(row[0] ?? '').trim()
+      if (!itemId) { skipped++; continue }
+      const itemName = String(row[1] ?? '').trim() || null
+      const uom = String(row[2] ?? '').trim() || null
+      await prisma.productRegistry.upsert({
+        where: { itemId },
+        update: { itemName, uom },
+        create: { itemId, itemName, uom },
+      })
+      imported++
+    }
 
     res.json({ imported, skipped })
   } catch (err) { next(err) }
