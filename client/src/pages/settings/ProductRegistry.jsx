@@ -6,9 +6,8 @@ import api from '@/lib/api'
 import { Plus, Trash2, Package, Upload, Download, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const registrySchema = z.object({
-  itemId: z.string().min(1, 'Item ID is required'),
-  itemName: z.string().optional(),
-  uom: z.string().optional(),
+  itemName: z.string().min(1, 'Item Name is required'),
+  externalId: z.string().min(1, 'External ID is required'),
 })
 
 export default function ProductRegistry() {
@@ -122,8 +121,8 @@ export default function ProductRegistry() {
       <div className="bg-navy-900 border border-navy-700 rounded-xl p-5">
         <p className="text-slate-300 text-sm font-medium mb-1">Product Registry</p>
         <p className="text-slate-500 text-xs">
-          Products in this registry are automatically skipped from the product-import.xlsx output during BOM conversion.
-          New products discovered during conversion are automatically added here.
+          Products in this registry are matched by Item Name during BOM conversion. If a match is found, its stored External ID is used in the product-import.xlsx. New products not in the registry are auto-added here with a generated External ID.
+          Import format: Column A = External ID, Column B = Item Name.
         </p>
       </div>
 
@@ -133,7 +132,7 @@ export default function ProductRegistry() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search by item ID or name..."
+            placeholder="Search by item name..."
             className="w-full bg-navy-800 border border-navy-600 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-electric-400"
           />
         </div>
@@ -170,18 +169,16 @@ export default function ProductRegistry() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-navy-800 border-b border-navy-700">
-                <th className="text-left px-4 py-3 text-slate-400 font-medium text-xs uppercase">Item ID</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium text-xs uppercase">Item Name</th>
-                <th className="text-left px-4 py-3 text-slate-400 font-medium text-xs uppercase">UOM</th>
+                <th className="text-left px-4 py-3 text-slate-400 font-medium text-xs uppercase">External ID</th>
                 <th className="text-left px-4 py-3 text-slate-400 font-medium text-xs uppercase">Actions</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, i) => (
                 <tr key={item.id} className={i % 2 === 0 ? 'bg-navy-900' : 'bg-navy-800/50'}>
-                  <td className="px-4 py-3 font-mono text-electric-300">{item.itemId}</td>
-                  <td className="px-4 py-3 text-slate-300">{item.itemName || <span className="text-slate-600 italic">—</span>}</td>
-                  <td className="px-4 py-3 font-mono text-slate-400">{item.uom || <span className="text-slate-600 italic">—</span>}</td>
+                  <td className="px-4 py-3 text-slate-300">{item.itemName}</td>
+                  <td className="px-4 py-3 font-mono text-electric-300 text-xs">{item.externalId}</td>
                   <td className="px-4 py-3">
                     <button onClick={() => handleDelete(item.id)}>
                       <Trash2 size={15} className="text-slate-400 hover:text-red-400" />
@@ -224,20 +221,18 @@ export default function ProductRegistry() {
             <div className="p-5 border-b border-navy-700 font-semibold text-slate-100">Add Product to Registry</div>
             <form onSubmit={handleSubmit(onSubmit)} className="p-5 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Item ID <span className="text-red-400">*</span></label>
-                <input {...register('itemId')} placeholder="e.g. PART-001"
-                  className="w-full bg-navy-800 border border-navy-600 rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:border-electric-400" />
-                {errors.itemId && <p className="text-red-400 text-xs mt-1">{errors.itemId.message}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Item Name <span className="text-slate-500">(optional)</span></label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Item Name <span className="text-red-400">*</span></label>
+                <p className="text-slate-500 text-xs mb-1.5">Must match the item name exactly as it appears in the BOM</p>
                 <input {...register('itemName')} placeholder="e.g. Widget Assembly"
                   className="w-full bg-navy-800 border border-navy-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-electric-400" />
+                {errors.itemName && <p className="text-red-400 text-xs mt-1">{errors.itemName.message}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">UOM <span className="text-slate-500">(optional)</span></label>
-                <input {...register('uom')} placeholder="e.g. EA"
+                <label className="block text-sm font-medium text-slate-300 mb-1">External ID <span className="text-red-400">*</span></label>
+                <p className="text-slate-500 text-xs mb-1.5">The ERP external ID for this product (e.g. __export__.product_template_12345)</p>
+                <input {...register('externalId')} placeholder="e.g. __export__.product_template_12345"
                   className="w-full bg-navy-800 border border-navy-600 rounded-lg px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:border-electric-400" />
+                {errors.externalId && <p className="text-red-400 text-xs mt-1">{errors.externalId.message}</p>}
               </div>
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setModal(false)} className="flex-1 bg-navy-700 text-slate-300 py-2 rounded-lg text-sm">Cancel</button>
