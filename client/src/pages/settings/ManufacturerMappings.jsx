@@ -93,7 +93,7 @@ export default function ManufacturerMappings() {
 
   return (
     <div className="space-y-5">
-      {toast && <div className="fixed top-4 right-4 bg-navy-800 border border-navy-600 text-slate-100 px-4 py-2 rounded-lg shadow-xl text-sm z-50">{toast}</div>}
+      {toast && <div className="fixed top-4 right-4 bg-navy-800 border border-navy-600 text-slate-100 px-4 py-2 rounded-lg shadow-xl text-sm z-[60]">{toast}</div>}
 
       <div className="bg-navy-900 border border-navy-700 rounded-xl p-5">
         <p className="text-slate-300 text-sm font-medium mb-1">Global Manufacturer Name Database</p>

@@ -6,12 +6,14 @@ import api from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { Plus, Edit2, Trash2, X, Users as UsersIcon } from 'lucide-react'
 
-const schema = z.object({
+const baseSchema = {
   username: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
-  password: z.string().optional(),
   role: z.enum(['ADMIN', 'USER']),
-})
+}
+// Create requires a password (matches server's min-8 rule); edit allows leaving it blank to keep the existing one.
+const createSchema = z.object({ ...baseSchema, password: z.string().min(8, 'Password must be at least 8 characters') })
+const editSchema = z.object({ ...baseSchema, password: z.string().min(8, 'Password must be at least 8 characters').optional().or(z.literal('')) })
 
 function Modal({ title, onClose, children }) {
   return (
@@ -48,7 +50,8 @@ export default function Users() {
   const [toast, setToast] = useState('')
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
-    resolver: zodResolver(schema),
+    resolver: (values, context, options) =>
+      zodResolver(modal?.mode === 'edit' ? editSchema : createSchema)(values, context, options),
   })
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(''), 3000) }
@@ -91,7 +94,7 @@ export default function Users() {
 
   return (
     <div className="space-y-4">
-      {toast && <div className="fixed top-4 right-4 bg-navy-800 border border-navy-600 text-slate-100 px-4 py-2 rounded-lg shadow-xl text-sm z-50">{toast}</div>}
+      {toast && <div className="fixed top-4 right-4 bg-navy-800 border border-navy-600 text-slate-100 px-4 py-2 rounded-lg shadow-xl text-sm z-[60]">{toast}</div>}
 
       <div className="flex items-center justify-between">
         <h3 className="text-slate-100 font-semibold">All Users</h3>

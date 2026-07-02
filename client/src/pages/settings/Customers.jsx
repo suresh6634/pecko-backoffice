@@ -47,7 +47,7 @@ export default function Customers() {
 
   if (view === 'form') return (
     <div className="max-w-2xl">
-      {toast && <div className="fixed top-4 right-4 bg-navy-800 border border-navy-600 text-slate-100 px-4 py-2 rounded-lg shadow-xl text-sm z-50">{toast}</div>}
+      {toast && <div className="fixed top-4 right-4 bg-navy-800 border border-navy-600 text-slate-100 px-4 py-2 rounded-lg shadow-xl text-sm z-[60]">{toast}</div>}
       <button onClick={() => setView('list')} className="flex items-center gap-2 text-slate-400 hover:text-slate-200 text-sm mb-4">
         <ArrowLeft size={16} /> Back to customers
       </button>
@@ -78,7 +78,7 @@ export default function Customers() {
 
   return (
     <div className="space-y-4">
-      {toast && <div className="fixed top-4 right-4 bg-navy-800 border border-navy-600 text-slate-100 px-4 py-2 rounded-lg shadow-xl text-sm z-50">{toast}</div>}
+      {toast && <div className="fixed top-4 right-4 bg-navy-800 border border-navy-600 text-slate-100 px-4 py-2 rounded-lg shadow-xl text-sm z-[60]">{toast}</div>}
       <div className="flex items-center justify-between">
         <h3 className="text-slate-100 font-semibold">Customers</h3>
         <button onClick={openCreate} className="flex items-center gap-2 bg-electric-500 hover:bg-electric-400 text-white px-4 py-2 rounded-lg text-sm font-medium">
