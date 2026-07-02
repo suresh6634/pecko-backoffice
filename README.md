@@ -119,14 +119,18 @@ Installs a `systemd` service (Linux) or `launchd` plist (macOS) that starts the 
 
 ### Option A — Railway (recommended, zero code changes) ⭐
 
-Railway supports persistent file systems. SQLite and file uploads work exactly as in local development.
+Railway *can* give you a persistent filesystem, but only if you attach a Volume — without one, the
+container disk is wiped on every deploy and both the SQLite database and uploaded files reset to
+nothing.
 
 1. Push this repo to GitHub (see [Pushing to GitHub](#pushing-to-github) below)
 2. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**
 3. Select this repository
-4. Add all environment variables from `.env.example` in the Railway dashboard
-5. Railway auto-detects Node.js and runs `npm start`
-6. You get a public `https://yourapp.railway.app` URL
+4. **Settings → Volumes → New Volume**, mount path `/data`
+5. Add all environment variables from `.env.example` in the Railway dashboard, setting
+   `DATABASE_URL=file:/data/pecko.db` and `UPLOAD_DIR=/data/uploads` so both live inside the volume
+6. Railway auto-detects Node.js and runs `npm start`
+7. You get a public `https://yourapp.railway.app` URL
 
 Cost: free Hobby tier available; ~$5/month for always-on production.
 
