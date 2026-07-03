@@ -8,11 +8,16 @@ import { requireAdmin } from '../middleware/adminOnly.js'
 const router = Router()
 router.use(requireAuth, requireAdmin)
 
+export const COMPANIES = ['PEI', 'PM', 'PKS']
+// Empty string (the form's "None" option) is normalized to null.
+const company = z.preprocess(v => (v === '' ? null : v), z.enum(COMPANIES).nullable().optional())
+
 const createUserSchema = z.object({
   username: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(8),
   role: z.enum(['ADMIN', 'USER']),
+  company,
 })
 
 const updateUserSchema = z.object({
@@ -20,9 +25,10 @@ const updateUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8).optional(),
   role: z.enum(['ADMIN', 'USER']),
+  company,
 })
 
-const select = { id: true, username: true, email: true, role: true, createdAt: true }
+const select = { id: true, username: true, email: true, role: true, company: true, createdAt: true }
 
 router.get('/', async (req, res, next) => {
   try {
@@ -32,17 +38,17 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { username, email, password, role } = createUserSchema.parse(req.body)
+    const { username, email, password, role, company } = createUserSchema.parse(req.body)
     const passwordHash = await bcrypt.hash(password, 12)
-    const user = await prisma.user.create({ data: { username, email, passwordHash, role }, select })
+    const user = await prisma.user.create({ data: { username, email, passwordHash, role, company: company ?? null }, select })
     res.status(201).json(user)
   } catch (err) { next(err) }
 })
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const { username, email, password, role } = updateUserSchema.parse(req.body)
-    const data = { username, email, role }
+    const { username, email, password, role, company } = updateUserSchema.parse(req.body)
+    const data = { username, email, role, company: company ?? null }
     if (password) data.passwordHash = await bcrypt.hash(password, 12)
     const user = await prisma.user.update({ where: { id: req.params.id }, data, select })
     res.json(user)

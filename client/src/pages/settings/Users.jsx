@@ -6,10 +6,13 @@ import api from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import { Plus, Edit2, Trash2, X, Users as UsersIcon } from 'lucide-react'
 
+const COMPANIES = ['PEI', 'PM', 'PKS']
+
 const baseSchema = {
   username: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
   role: z.enum(['ADMIN', 'USER']),
+  company: z.enum(COMPANIES).or(z.literal('')), // '' = no company
 }
 // Create requires a password (matches server's min-8 rule); edit allows leaving it blank to keep the existing one.
 const createSchema = z.object({ ...baseSchema, password: z.string().min(8, 'Password must be at least 8 characters') })
@@ -60,8 +63,8 @@ export default function Users() {
 
   useEffect(() => { load() }, [])
 
-  function openCreate() { reset({ username: '', email: '', password: '', role: 'USER' }); setModal({ mode: 'create' }) }
-  function openEdit(u) { reset({ username: u.username, email: u.email, password: '', role: u.role }); setModal({ mode: 'edit', user: u }) }
+  function openCreate() { reset({ username: '', email: '', password: '', role: 'USER', company: '' }); setModal({ mode: 'create' }) }
+  function openEdit(u) { reset({ username: u.username, email: u.email, password: '', role: u.role, company: u.company || '' }); setModal({ mode: 'edit', user: u }) }
 
   async function onSubmit(data) {
     try {
@@ -109,7 +112,7 @@ export default function Users() {
         ) : (
           <table className="w-full text-sm">
             <thead><tr className="bg-navy-800 border-b border-navy-700">
-              {['Name', 'Email', 'Role', 'Created', 'Actions'].map(h => <th key={h} className="text-left px-4 py-3 text-slate-400 font-medium text-xs uppercase">{h}</th>)}
+              {['Name', 'Email', 'Role', 'Company', 'Created', 'Actions'].map(h => <th key={h} className="text-left px-4 py-3 text-slate-400 font-medium text-xs uppercase">{h}</th>)}
             </tr></thead>
             <tbody>
               {users.map((u, i) => (
@@ -117,6 +120,7 @@ export default function Users() {
                   <td className="px-4 py-3 text-slate-100">{u.username}</td>
                   <td className="px-4 py-3 text-slate-400 font-mono text-xs">{u.email}</td>
                   <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full ${u.role === 'ADMIN' ? 'bg-electric-500/20 text-electric-300' : 'bg-navy-700 text-slate-400'}`}>{u.role}</span></td>
+                  <td className="px-4 py-3">{u.company ? <span className="text-xs px-2 py-0.5 rounded-full bg-navy-700 text-slate-300">{u.company}</span> : <span className="text-slate-600 text-xs">—</span>}</td>
                   <td className="px-4 py-3 text-slate-400 text-xs">{new Date(u.createdAt).toLocaleDateString()}</td>
                   <td className="px-4 py-3 flex gap-2">
                     <button onClick={() => openEdit(u)}><Edit2 size={15} className="text-slate-400 hover:text-electric-300" /></button>
@@ -140,6 +144,13 @@ export default function Users() {
               <select {...register('role')} className="w-full bg-navy-800 border border-navy-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-electric-400">
                 <option value="USER">User</option>
                 <option value="ADMIN">Admin</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Company</label>
+              <select {...register('company')} className="w-full bg-navy-800 border border-navy-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-electric-400">
+                <option value="">— None —</option>
+                {COMPANIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div className="flex gap-3 pt-2">
