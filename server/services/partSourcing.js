@@ -67,6 +67,8 @@ function normalizePart(part) {
     supplyChainRisk: part.SupplyChainRisk || null,
     isAffectedByTariff: part.IsAffectedByTariff || false,
     specifications: (part.Specifications || []).map(s => ({ key: s.Key, value: s.Value })),
+    // Datasheet links are per-distributor; surface the first available as the part's canonical one.
+    datasheetUrl: offers.find(o => o.datasheetUrl)?.datasheetUrl || null,
     imageUrl: linkOf(part.Distributors?.flatMap(d => d.DistributorResults?.flatMap(r => r.Links || []) || []) || [], 'Image'),
     priceRange: priceRange(offers),
     offerCount: offers.length,

@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import api from '@/lib/api'
+import { cn } from '@/lib/utils'
 import {
   Search as SearchIcon, ExternalLink, FileText, Loader2, AlertCircle,
-  PackageSearch, ShieldCheck, Cpu,
+  PackageSearch, ShieldCheck, Cpu, ListTree, Store, MessageSquare, Info,
 } from 'lucide-react'
 
 // Best unit price for a quantity: the cheapest tier whose break quantity is <= qty.
@@ -24,6 +25,7 @@ export default function SourceRawMaterialsSearch() {
   const [phase, setPhase] = useState('idle') // idle | loading | done | error
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [tab, setTab] = useState('overview') // overview | specs | distributors | chat
 
   async function handleSearch(e) {
     e?.preventDefault()
@@ -32,6 +34,7 @@ export default function SourceRawMaterialsSearch() {
     setPhase('loading')
     setError('')
     setResult(null)
+    setTab('overview')
     try {
       const { data } = await api.get('/part-sourcing/search', { params: { q } })
       setResult(data)
@@ -93,10 +96,45 @@ export default function SourceRawMaterialsSearch() {
       {phase === 'done' && part && (
         <>
           <PartHeader part={part} />
-          <OffersTable offers={part.offers} qty={qty} setQty={setQty} />
+
+          {/* Tabs */}
+          <div>
+            <div className="flex gap-1 border-b border-navy-600">
+              <TabButton active={tab === 'overview'} onClick={() => setTab('overview')} icon={Info}
+                label="Overview" />
+              <TabButton active={tab === 'specs'} onClick={() => setTab('specs')} icon={ListTree}
+                label="Specifications" count={part.specifications.length} />
+              <TabButton active={tab === 'distributors'} onClick={() => setTab('distributors')} icon={Store}
+                label="Distributors" count={part.offerCount} />
+              <TabButton active={tab === 'chat'} onClick={() => setTab('chat')} icon={MessageSquare}
+                label="Ask AI" />
+            </div>
+
+            <div className="pt-5">
+              {tab === 'overview' && <OverviewTab part={part} onViewDistributors={() => setTab('distributors')} />}
+              {tab === 'specs' && <SpecsTab specifications={part.specifications} />}
+              {tab === 'distributors' && <OffersTable offers={part.offers} qty={qty} setQty={setQty} />}
+              {tab === 'chat' && <ChatTab part={part} />}
+            </div>
+          </div>
         </>
       )}
     </div>
+  )
+}
+
+function TabButton({ active, onClick, icon: Icon, label, count }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+        active ? 'border-electric-400 text-electric-300' : 'border-transparent text-slate-400 hover:text-slate-200'
+      )}
+    >
+      <Icon size={16} /> {label}
+      {count != null && <span className="text-xs text-slate-500">({count})</span>}
+    </button>
   )
 }
 
@@ -113,18 +151,23 @@ function PartHeader({ part }) {
         <div className="flex items-center gap-3 flex-wrap">
           <h2 className="text-2xl font-bold text-slate-100">{part.partNumber}</h2>
           <span className="text-slate-400">by {part.manufacturer}</span>
+        </div>
+        {part.description && <p className="text-slate-400 mt-1">{part.description}</p>}
+        <div className="flex items-center gap-4 mt-3 flex-wrap">
           {part.productUrl && (
             <a href={part.productUrl} target="_blank" rel="noreferrer"
               className="inline-flex items-center gap-1 text-electric-300 hover:text-electric-400 text-sm">
               <ExternalLink size={14} /> Part Details
             </a>
           )}
-        </div>
-        {part.description && <p className="text-slate-400 mt-1">{part.description}</p>}
-        <div className="flex gap-4 mt-3 text-xs text-slate-500 flex-wrap">
-          <span>{part.offerCount} distributor offer{part.offerCount === 1 ? '' : 's'}</span>
-          {part.lifecycleRisk && <span>Lifecycle: {part.lifecycleRisk}</span>}
-          {part.isAffectedByTariff && <span className="text-amber-400">Tariff-affected</span>}
+          {part.datasheetUrl && (
+            <a href={part.datasheetUrl} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1 text-electric-300 hover:text-electric-400 text-sm">
+              <FileText size={14} /> Datasheet
+            </a>
+          )}
+          {part.lifecycleRisk && <span className="text-xs text-slate-500">Lifecycle: {part.lifecycleRisk}</span>}
+          {part.isAffectedByTariff && <span className="text-xs text-amber-400">Tariff-affected</span>}
         </div>
       </div>
 
@@ -136,6 +179,84 @@ function PartHeader({ part }) {
           </p>
         </div>
       )}
+    </div>
+  )
+}
+
+function OverviewTab({ part, onViewDistributors }) {
+  const inStock = part.offers.filter(o => o.stock.quantity > 0).length
+  const rohsCompliant = part.offers.some(o => o.rohs === true)
+  const topSpecs = part.specifications.slice(0, 6)
+
+  const stats = [
+    { label: 'Best price', value: part.priceRange ? money(part.priceRange.min, part.priceRange.currency) : '—', sub: 'lowest unit price' },
+    { label: 'Distributors', value: part.offerCount, sub: `${inStock} with stock` },
+    { label: 'RoHS', value: rohsCompliant ? 'Compliant' : '—', sub: rohsCompliant ? 'per distributor data' : 'not reported' },
+    { label: 'Lifecycle', value: part.lifecycleRisk || 'Active', sub: part.isAffectedByTariff ? 'tariff-affected' : 'risk status' },
+  ]
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map(s => (
+          <div key={s.label} className="bg-navy-800 border border-navy-600 rounded-xl p-4">
+            <p className="text-xs text-slate-500 uppercase tracking-wide">{s.label}</p>
+            <p className="text-xl font-semibold text-slate-100 mt-1">{s.value}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-navy-800 border border-navy-600 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-slate-200">Key specifications</h3>
+          <button onClick={onViewDistributors} className="text-sm text-electric-300 hover:text-electric-400">
+            View {part.offerCount} distributor offers →
+          </button>
+        </div>
+        {topSpecs.length ? (
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
+            {topSpecs.map((s, i) => (
+              <div key={i} className="flex justify-between gap-4 py-1.5 border-b border-navy-700">
+                <dt className="text-slate-400 text-sm">{s.key}</dt>
+                <dd className="text-slate-100 text-sm font-medium text-right">{s.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="text-slate-500 text-sm">No specifications available for this part.</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function SpecsTab({ specifications }) {
+  if (!specifications.length) {
+    return <p className="text-slate-500 text-sm py-8 text-center">No specifications available for this part.</p>
+  }
+  return (
+    <div className="bg-navy-800 border border-navy-600 rounded-xl overflow-hidden">
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-navy-600">
+        {specifications.map((s, i) => (
+          <div key={i} className="bg-navy-800 px-5 py-3 flex justify-between gap-4">
+            <dt className="text-slate-400 text-sm">{s.key}</dt>
+            <dd className="text-slate-100 text-sm font-medium text-right">{s.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
+}
+
+function ChatTab({ part }) {
+  return (
+    <div className="bg-navy-800 border border-navy-600 rounded-xl p-10 flex flex-col items-center justify-center text-center min-h-64">
+      <MessageSquare size={40} className="text-slate-600 mb-4" />
+      <h3 className="text-slate-200 font-semibold">Ask AI about {part.partNumber}</h3>
+      <p className="text-slate-500 text-sm mt-2 max-w-sm">
+        Chat about this part — specs, alternatives, sourcing questions. DeepSeek integration coming soon.
+      </p>
     </div>
   )
 }
