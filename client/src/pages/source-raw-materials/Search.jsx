@@ -3,10 +3,12 @@ import api from '@/lib/api'
 import { cn } from '@/lib/utils'
 import {
   Search as SearchIcon, ExternalLink, FileText, Loader2, AlertCircle,
-  PackageSearch, ShieldCheck, Cpu, ListTree, Store, MessageSquare, Info, Send,
+  PackageSearch, ShieldCheck, Cpu, ListTree, Store, MessageSquare, Info, Send, SearchX,
 } from 'lucide-react'
 
-const INITIAL_CHAT_QUERY = 'Find independent stockists that currently list this part, with their product links.'
+// The default prompt auto-sent when the Ask AI tab is first opened for a part.
+const buildInitialPrompt = partNumber =>
+  `For this Electronics manufacturing part number "${partNumber}" search through the web and Find stockiest and give me detailed information in card format with all default informations available about this part`
 
 // Best unit price for a quantity: the cheapest tier whose break quantity is <= qty.
 // Returns null if qty is below every tier's break (i.e. minimum not met).
@@ -53,8 +55,8 @@ export default function SourceRawMaterialsSearch() {
 
   const part = result?.parts?.[0]
 
-  async function sendChat(text) {
-    const history = [...chat.messages, { role: 'user', content: text }]
+  async function sendChat(text, { hidden = false } = {}) {
+    const history = [...chat.messages, { role: 'user', content: text, hidden }]
     setChat(c => ({ ...c, messages: history, loading: true, error: '' }))
     try {
       const { data } = await api.post('/part-sourcing/chat', {
@@ -64,7 +66,7 @@ export default function SourceRawMaterialsSearch() {
           description: part.description,
           specifications: part.specifications,
         },
-        messages: history,
+        messages: history.map(m => ({ role: m.role, content: m.content })),
       })
       setChat(c => ({
         ...c,
@@ -76,11 +78,11 @@ export default function SourceRawMaterialsSearch() {
     }
   }
 
-  // Auto-run the stockist search the first time the Ask AI tab is opened for a part.
+  // Auto-run the default prompt the first time the Ask AI tab is opened for a part.
   function ensureChatStarted() {
     if (chatStartedRef.current) return
     chatStartedRef.current = true
-    sendChat(INITIAL_CHAT_QUERY)
+    sendChat(buildInitialPrompt(part.partNumber), { hidden: true })
   }
 
   return (
@@ -292,8 +294,8 @@ function ChatTab({ part, chat, onSend, onMount }) {
   useEffect(() => { onMount() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chat.messages, chat.loading])
 
-  // Skip the auto-run initial query when rendering the transcript (it's system-like).
-  const visible = chat.messages.filter((m, i) => !(i === 0 && m.role === 'user' && m.content === INITIAL_CHAT_QUERY))
+  // Hide the auto-run default prompt from the transcript (it's system-like).
+  const visible = chat.messages.filter(m => !m.hidden)
 
   function submit(e) {
     e.preventDefault()
@@ -357,6 +359,10 @@ function ChatBubble({ message }) {
   }
 
   const cards = message.stockists || []
+  // No cards AND no text → show a clear "nothing found" panel instead of a blank turn.
+  if (!cards.length && !message.content) {
+    return <NoResults />
+  }
   return (
     <div className="space-y-3">
       {message.content && (
@@ -369,6 +375,18 @@ function ChatBubble({ message }) {
           {cards.map((s, i) => <StockistCard key={i} s={s} />)}
         </div>
       )}
+    </div>
+  )
+}
+
+function NoResults() {
+  return (
+    <div className="bg-navy-900 border border-navy-600 rounded-xl p-8 flex flex-col items-center text-center">
+      <SearchX size={32} className="text-slate-600 mb-3" />
+      <p className="text-slate-300 font-medium">No independent stockists found</p>
+      <p className="text-slate-500 text-sm mt-1 max-w-xs">
+        The web search returned no independent stockist listings for this part. Try a different part number, or check the Distributors tab.
+      </p>
     </div>
   )
 }
