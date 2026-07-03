@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import api from '@/lib/api'
 import { cn } from '@/lib/utils'
 import {
   Search as SearchIcon, ExternalLink, FileText, Loader2, AlertCircle,
-  PackageSearch, ShieldCheck, Cpu, ListTree, Store, MessageSquare, Info,
+  PackageSearch, ShieldCheck, Cpu, ListTree, Store, MessageSquare, Info, Send,
 } from 'lucide-react'
+
+const INITIAL_CHAT_QUERY = 'Find independent stockists that currently list this part, with their product links.'
 
 // Best unit price for a quantity: the cheapest tier whose break quantity is <= qty.
 // Returns null if qty is below every tier's break (i.e. minimum not met).
@@ -26,6 +28,8 @@ export default function SourceRawMaterialsSearch() {
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
   const [tab, setTab] = useState('overview') // overview | specs | distributors | chat
+  const [chat, setChat] = useState({ messages: [], loading: false, error: '' })
+  const chatStartedRef = useRef(false)
 
   async function handleSearch(e) {
     e?.preventDefault()
@@ -35,6 +39,8 @@ export default function SourceRawMaterialsSearch() {
     setError('')
     setResult(null)
     setTab('overview')
+    setChat({ messages: [], loading: false, error: '' })
+    chatStartedRef.current = false
     try {
       const { data } = await api.get('/part-sourcing/search', { params: { q } })
       setResult(data)
@@ -46,6 +52,36 @@ export default function SourceRawMaterialsSearch() {
   }
 
   const part = result?.parts?.[0]
+
+  async function sendChat(text) {
+    const history = [...chat.messages, { role: 'user', content: text }]
+    setChat(c => ({ ...c, messages: history, loading: true, error: '' }))
+    try {
+      const { data } = await api.post('/part-sourcing/chat', {
+        part: {
+          partNumber: part.partNumber,
+          manufacturer: part.manufacturer,
+          description: part.description,
+          specifications: part.specifications,
+        },
+        messages: history,
+      })
+      setChat(c => ({
+        ...c,
+        messages: [...history, { role: 'assistant', content: data.reply, sources: data.sources }],
+        loading: false,
+      }))
+    } catch (err) {
+      setChat(c => ({ ...c, loading: false, error: err.response?.data?.error || 'Chat failed. Please try again.' }))
+    }
+  }
+
+  // Auto-run the stockist search the first time the Ask AI tab is opened for a part.
+  function ensureChatStarted() {
+    if (chatStartedRef.current) return
+    chatStartedRef.current = true
+    sendChat(INITIAL_CHAT_QUERY)
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -114,7 +150,7 @@ export default function SourceRawMaterialsSearch() {
               {tab === 'overview' && <OverviewTab part={part} onViewDistributors={() => setTab('distributors')} />}
               {tab === 'specs' && <SpecsTab specifications={part.specifications} />}
               {tab === 'distributors' && <OffersTable offers={part.offers} qty={qty} setQty={setQty} />}
-              {tab === 'chat' && <ChatTab part={part} />}
+              {tab === 'chat' && <ChatTab part={part} chat={chat} onSend={sendChat} onMount={ensureChatStarted} />}
             </div>
           </div>
         </>
@@ -249,14 +285,87 @@ function SpecsTab({ specifications }) {
   )
 }
 
-function ChatTab({ part }) {
+function ChatTab({ part, chat, onSend, onMount }) {
+  const [input, setInput] = useState('')
+  const bottomRef = useRef(null)
+
+  useEffect(() => { onMount() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chat.messages, chat.loading])
+
+  // Skip the auto-run initial query when rendering the transcript (it's system-like).
+  const visible = chat.messages.filter((m, i) => !(i === 0 && m.role === 'user' && m.content === INITIAL_CHAT_QUERY))
+
+  function submit(e) {
+    e.preventDefault()
+    const text = input.trim()
+    if (!text || chat.loading) return
+    setInput('')
+    onSend(text)
+  }
+
   return (
-    <div className="bg-navy-800 border border-navy-600 rounded-xl p-10 flex flex-col items-center justify-center text-center min-h-64">
-      <MessageSquare size={40} className="text-slate-600 mb-4" />
-      <h3 className="text-slate-200 font-semibold">Ask AI about {part.partNumber}</h3>
-      <p className="text-slate-500 text-sm mt-2 max-w-sm">
-        Chat about this part — specs, alternatives, sourcing questions. DeepSeek integration coming soon.
-      </p>
+    <div className="bg-navy-800 border border-navy-600 rounded-xl flex flex-col h-[32rem]">
+      <div className="px-5 py-3 border-b border-navy-600 flex items-center gap-2">
+        <MessageSquare size={16} className="text-electric-300" />
+        <h3 className="font-semibold text-slate-200">Ask AI about {part.partNumber}</h3>
+        <span className="text-xs text-slate-500 ml-auto">Independent stockists · electronics parts only</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        {visible.length === 0 && !chat.loading && (
+          <p className="text-slate-500 text-sm text-center py-8">Searching for independent stockists…</p>
+        )}
+        {visible.map((m, i) => <ChatBubble key={i} message={m} />)}
+        {chat.loading && (
+          <div className="flex items-center gap-2 text-slate-400 text-sm">
+            <Loader2 size={16} className="animate-spin" /> Searching &amp; thinking…
+          </div>
+        )}
+        {chat.error && (
+          <div className="flex items-center gap-2 text-red-300 text-sm">
+            <AlertCircle size={16} /> {chat.error}
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      <form onSubmit={submit} className="p-3 border-t border-navy-600 flex gap-2">
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          placeholder={`Ask about ${part.partNumber} — stockists, specs, availability…`}
+          className="flex-1 bg-navy-900 border border-navy-600 rounded-lg px-4 py-2.5 text-slate-100 placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-electric-400"
+        />
+        <button type="submit" disabled={chat.loading || !input.trim()}
+          className="px-4 rounded-lg bg-electric-500 hover:bg-electric-400 disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center gap-2">
+          <Send size={16} />
+        </button>
+      </form>
+    </div>
+  )
+}
+
+function ChatBubble({ message }) {
+  const isUser = message.role === 'user'
+  return (
+    <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
+      <div className={cn(
+        'max-w-[80%] rounded-xl px-4 py-2.5 text-sm whitespace-pre-wrap',
+        isUser ? 'bg-electric-500/20 text-slate-100' : 'bg-navy-900 border border-navy-600 text-slate-200'
+      )}>
+        {message.content}
+        {!isUser && message.sources?.length > 0 && (
+          <div className="mt-3 pt-2 border-t border-navy-700 space-y-1">
+            <p className="text-xs text-slate-500 uppercase tracking-wide">Sources</p>
+            {message.sources.slice(0, 6).map((s, i) => (
+              <a key={i} href={s.url} target="_blank" rel="noreferrer"
+                className="flex items-center gap-1 text-xs text-electric-300 hover:text-electric-400 truncate">
+                <ExternalLink size={11} className="shrink-0" /> <span className="truncate">{s.title || s.url}</span>
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
