@@ -20,6 +20,7 @@ import dashboardRouter from './routes/dashboard.js'
 import convertRouter from './routes/convert.js'
 import downloadRouter from './routes/download.js'
 import rfqRouter from './routes/rfq.js'
+import { startRfqScheduler } from './services/rfqGraphSync.js'
 
 const app = express()
 
@@ -68,6 +69,9 @@ app.use((err, req, res, next) => {
 })
 
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => logger.info(`Server running on port ${PORT}`))
+app.listen(PORT, () => {
+  logger.info(`Server running on port ${PORT}`)
+  startRfqScheduler()
+})
 
 export default app

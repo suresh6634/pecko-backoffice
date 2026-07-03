@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import api from '@/lib/api'
+import { useAuth } from '@/contexts/AuthContext'
 import {
   RefreshCw, AlertTriangle, CheckCircle2, CircleDashed, FileSpreadsheet, Search,
   CalendarX2, CalendarClock, Flag, X,
@@ -65,6 +66,7 @@ function StatCard({ icon: Icon, label, value, tone, active, onClick, footer }) {
 }
 
 export default function RfqDashboard() {
+  const { user: me } = useAuth()
   const [rows, setRows] = useState([])
   const [meta, setMeta] = useState({ lastSyncedAt: null, lastSource: null })
   const [loading, setLoading] = useState(true)
@@ -148,6 +150,19 @@ export default function RfqDashboard() {
     }
   }
 
+  async function onSyncFromSource() {
+    setSyncing(true)
+    try {
+      const { data } = await api.post('/rfq/sync/graph')
+      showToast(`Synced from source · ${data.stats.total} projects · ${data.stats.pendingReview} need action`)
+      await loadAll()
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Source sync failed')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const hasData = rows.length > 0
 
   return (
@@ -168,7 +183,14 @@ export default function RfqDashboard() {
             </p>
           )}
         </div>
-        <div>
+        <div className="flex items-center gap-2">
+          {me?.role === 'ADMIN' && (
+            <button onClick={onSyncFromSource} disabled={syncing}
+              className="flex items-center gap-2 bg-navy-700 hover:bg-navy-600 disabled:opacity-60 text-slate-200 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+              title="Pull the latest file straight from OneDrive (same as the nightly 10pm sync)">
+              <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} /> Sync from Source
+            </button>
+          )}
           <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={onSyncFile} className="hidden" />
           <button onClick={() => fileRef.current?.click()} disabled={syncing}
             className="flex items-center gap-2 bg-electric-500 hover:bg-electric-400 disabled:opacity-60 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">

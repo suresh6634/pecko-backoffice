@@ -2,8 +2,10 @@ import { Router } from 'express'
 import express from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth } from '../middleware/auth.js'
+import { requireAdmin } from '../middleware/adminOnly.js'
 import { importUpload } from '../middleware/upload.js'
-import { parseRfqWorkbook } from '../services/rfqParser.js'
+import { saveRfqSnapshot } from '../services/rfqStore.js'
+import { syncRfqFromGraph, isGraphConfigured } from '../services/rfqGraphSync.js'
 import { logger } from '../lib/logger.js'
 
 const router = Router()
@@ -32,48 +34,26 @@ router.post('/sync', rfqSyncAuth, rawXlsx, importUpload.single('file'), async (r
   try {
     const buffer = req.file?.buffer || (Buffer.isBuffer(req.body) && req.body.length ? req.body : null)
     if (!buffer) return res.status(400).json({ error: 'No file received' })
-
-    const { rows, stats } = await parseRfqWorkbook(buffer)
-    const syncedAt = new Date()
-
-    // Full replace: the sheet is the source of truth.
-    await prisma.$transaction([
-      prisma.rfqProject.deleteMany({}),
-      prisma.rfqProject.createMany({
-        data: rows.map(r => ({
-          rowNumber: r.rowNumber,
-          projectId: r.projectId,
-          customer: r.customer,
-          linkSource: r.linkSource,
-          pic: r.pic,
-          projectType: r.projectType,
-          notes: r.notes,
-          rfqDueDateRaw: r.rfqDueDateRaw,
-          rfqDueDate: r.rfqDueDate,
-          rfqReceivedDateRaw: r.rfqReceivedDateRaw,
-          sofeaDateRaw: r.sofeaDateRaw,
-          submissionDateRaw: r.submissionDateRaw,
-          status: r.status,
-          syncedAt,
-        })),
-      }),
-      prisma.rfqSync.create({
-        data: {
-          syncedAt,
-          source: req.syncSource,
-          total: stats.total,
-          completed: stats.completed,
-          pendingReview: stats.pendingReview,
-          other: stats.other,
-          none: stats.none,
-        },
-      }),
-    ])
-
+    const { stats, syncedAt } = await saveRfqSnapshot(buffer, req.syncSource)
     logger.info(`RFQ sync (${req.syncSource}): ${stats.total} rows, ${stats.pendingReview} pending review`)
     res.json({ success: true, stats, syncedAt })
   } catch (err) {
     logger.error('RFQ sync failed:', err)
+    next(err)
+  }
+})
+
+// Admin-triggered pull straight from the source file via Microsoft Graph (same path the 10pm job uses).
+// Lets an admin test the scheduled sync on demand once the Graph credentials are configured.
+router.post('/sync/graph', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    if (!isGraphConfigured()) {
+      return res.status(400).json({ error: 'Source sync is not configured on the server (missing Graph credentials)' })
+    }
+    const { stats, syncedAt } = await syncRfqFromGraph('manual')
+    res.json({ success: true, stats, syncedAt })
+  } catch (err) {
+    logger.error('RFQ Graph sync failed:', err)
     next(err)
   }
 })
