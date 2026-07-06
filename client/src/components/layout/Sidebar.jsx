@@ -13,7 +13,7 @@ const inactiveClass = 'text-slate-400 hover:bg-navy-700 hover:text-slate-100'
 // company. Admins see everything.
 function filterTree(nodes, ctx) {
   return nodes
-    .filter(node => (!node.adminOnly || ctx.isAdmin) && (!node.company || ctx.isAdmin || node.company === ctx.company))
+    .filter(node => (!node.adminOnly || ctx.isAdmin) && (!node.company || ctx.isAdmin || ctx.companies.includes(node.company)))
     .map(node => (node.children ? { ...node, children: filterTree(node.children, ctx) } : node))
 }
 
@@ -94,7 +94,7 @@ export default function Sidebar() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const isAdmin = user?.role === 'ADMIN'
-  const tree = filterTree(NAV_TREE, { isAdmin, company: user?.company })
+  const tree = filterTree(NAV_TREE, { isAdmin, companies: user?.companies || [] })
 
   const [expanded, setExpanded] = useState(() => {
     const open = new Set()
